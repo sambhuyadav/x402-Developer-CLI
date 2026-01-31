@@ -3,10 +3,8 @@ use colored::*;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
 use tokio::process::Command as TokioCommand;
 use sha2::{Digest, Sha256};
-use hex::encode;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Wallet {

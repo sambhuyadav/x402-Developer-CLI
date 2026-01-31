@@ -1,12 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use colored::*;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
-use tokio::net::TcpListener as TokioTcpListener;
 
 pub struct Facilitator {
     pub port: u16,
@@ -42,7 +41,7 @@ impl Facilitator {
     pub fn stop() -> Result<bool> {
         println!("{}", "Stopping facilitator...".yellow());
 
-        let mut cmd = Command::new("pkill")
+        let cmd = Command::new("pkill")
             .args(["-f", "facilitator"])
             .spawn()
             .ok();
