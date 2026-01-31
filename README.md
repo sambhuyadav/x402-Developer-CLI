@@ -915,12 +915,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Uses [Colored](https://github.com/mackwic/colored) for terminal colors
 - Inspired by [x402 protocol](https://x402.org) specifications
 
-## Contact
-
-- **GitHub**: [https://github.com/your-username/x402-cli](https://github.com/your-username/x402-cli)
-- **Issues**: [https://github.com/your-username/x402-cli/issues](https://github.com/your-username/x402-cli/issues)
-- **Discussions**: [https://github.com/your-username/x402-cli/discussions](https://github.com/your-username/x402-cli/discussions)
-
----
 
 **Built with ❤️ for the x402 community**
