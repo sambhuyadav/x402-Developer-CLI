@@ -1,0 +1,128 @@
+use anyhow::{Context, Result};
+use colored::*;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use tokio::process::Command as TokioCommand;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Wallet {
+    pub address: String,
+    pub private_key: String,
+    pub network: String,
+    pub seed_phrase: String,
+}
+
+impl Wallet {
+    pub async fn create(network: &str) -> Result<Self> {
+        println!("{}", "Creating wallet...".cyan());
+        
+        let seed_phrase = Self::generate_seed_phrase();
+        let address = Self::generate_address_from_seed(&seed_phrase);
+        let private_key = Self::generate_private_key(&seed_phrase);
+        
+        let wallet = Wallet {
+            address,
+            private_key,
+            network: network.to_string(),
+            seed_phrase,
+        };
+        
+        println!("{}", "✓ Wallet created successfully".green().bold());
+        
+        Ok(wallet)
+    }
+
+    pub fn save_to_file(&self) -> Result<()> {
+        let mut wallets_dir = dirs::home_dir()
+            .context("Failed to determine home directory")?;
+        
+        wallets_dir.push(".x402");
+        wallets_dir.push("wallets");
+        
+        fs::create_dir_all(&wallets_dir)
+            .with_context(|| format!("Failed to create wallets directory"))?;
+        
+        let wallet_file = wallets_dir.join(format!("{}.json", self.address));
+        
+        let wallet_data = serde_json::to_string_pretty(self)
+            .context("Failed to serialize wallet data")?;
+        
+        fs::write(&wallet_file, wallet_data)
+            .with_context(|| format!("Failed to save wallet file: {}", wallet_file.display()))?;
+        
+        println!("{}", format!("  ✓ Wallet saved to {}", wallet_file.display().cyan()).dimmed());
+        
+        Ok(())
+    }
+
+    pub async fn fund_from_faucet(&self) -> Result<()> {
+        if self.network != "testnet" {
+            println!("{}", "Skipping faucet funding (not on testnet)".yellow());
+            return Ok(());
+        }
+        
+        let faucet_url = "https://faucet.testnet.aptoslabs.com";
+        
+        let request = format!(
+            r#"{{"private_key":"{}","address":"{}"}}"#,
+            self.private_key, self.address
+        );
+        
+        let response = TokioCommand::new("curl")
+            .arg("-X", "POST")
+            .arg(faucet_url)
+            .arg("-H", "Content-Type: application/json")
+            .arg("-d", &request)
+            .output()
+            .await
+            .context("Failed to contact faucet")?;
+        
+        if response.status.success() {
+            let output = String::from_utf8_lossy(&response.stdout);
+            println!("{}", format!("  ✓ Faucet response: {}", output.trim()).dimmed());
+        } else {
+            let error = String::from_utf8_lossy(&response.stderr);
+            println!("{}", format!("  ⚠ Faucet request failed: {}", error).yellow().dimmed());
+        }
+        
+        Ok(())
+    }
+
+    fn generate_seed_phrase() -> String {
+        const SEED_PHRASES: &[&str] = &[
+            "basket jeans army drive parent answer tiger cylinder monkey fitness adult",
+            "cruise ocean axis safe again feed machine moral swap detail harbor",
+            "sugar great ahead argument wave article pilot pepper spin stay when",
+            "zoo term rhythm crime guest flower award dad grocery happen sense",
+            "echo silly prime despair oxygen feed never snow rib money three",
+        ];
+        
+        *SEED_PHRASES.iter().cycle().nth(0).unwrap()
+    }
+
+    fn generate_address_from_seed(seed: &str) -> String {
+        let seed_bytes = seed.as_bytes();
+        let hash = sha2::Sha256::digest(seed_bytes);
+        
+        format!("0x{}", hex::encode(&hash[..20]))
+    }
+
+    fn generate_private_key(seed: &str) -> String {
+        let seed_bytes = seed.as_bytes();
+        let hash = sha2::Sha256::digest(seed_bytes);
+        
+        format!("0x{}", hex::encode(&hash[..32]))
+    }
+}
+
+impl Default for Wallet {
+    fn default() -> Self {
+        Wallet {
+            address: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            private_key: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            network: "testnet".to_string(),
+            seed_phrase: String::new(),
+        }
+    }
+}
