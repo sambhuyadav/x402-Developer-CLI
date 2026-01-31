@@ -58,7 +58,7 @@ Clone the repository and build the CLI:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/x402-cli.git
+git clone https://github.com/sambhuyadav/x402-cli.git
 cd x402-cli
 
 # Build in release mode for optimal performance
