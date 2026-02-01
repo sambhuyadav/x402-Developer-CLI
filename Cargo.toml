@@ -14,6 +14,8 @@ categories = ["command-line-interface", "development-tools"]
 repository = "https://github.com/sambhuyadav/x402-Developer-CLI"
 homepage = "https://github.com/sambhuyadav/x402-Developer-CLI#readme"
 documentation = "https://docs.rs/crate/x402-cli/"
+keywords = ["x402", "cli", "aptos", "blockchain", "automation"]
+categories = ["command-line-interface", "development-tools"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -29,3 +31,9 @@ env_logger = "0.11"
 sha2 = "0.10"
 hex = "0.4"
 chrono = "0.4"
+ed25519-dalek = "2.1"
+rand = "0.8"
+
+[[bin]]
+name = "x402-cli"
+path = "src/main.rs"

@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use clap::Parser;
-use colored::*;
-use std::io::{Read, Write};
+use colored::Colorize;
+use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -11,7 +11,7 @@ pub struct Facilitator {
     pub port: u16,
     pub wallet: crate::x402::wallet::Wallet,
     pub url: String,
-    pub running: bool,
+    pub running: Arc<AtomicBool>,
 }
 
 impl Facilitator {
@@ -19,12 +19,13 @@ impl Facilitator {
         println!("{}", "Starting facilitator...".cyan());
 
         let url = format!("http://localhost:{}", port);
+        let running = Arc::new(AtomicBool::new(true));
 
         let facilitator = Facilitator {
             port,
             wallet: crate::x402::wallet::Wallet::default(),
             url: url.clone(),
-            running: true,
+            running,
         };
 
         facilitator.start_server()?;
@@ -41,23 +42,24 @@ impl Facilitator {
     pub fn stop() -> Result<bool> {
         println!("{}", "Stopping facilitator...".yellow());
 
-        let mut cmd = Command::new("pkill")
-            .args(["-f", "facilitator"])
-            .spawn()
-            .ok();
+        let output = std::process::Command::new("pkill")
+            .args(["-f", "x402-cli"])
+            .output()
+            .context("Failed to execute pkill command")?;
 
-        if let Some(mut process) = cmd {
-            if process.wait().is_ok() {
-                return Ok(true);
-            }
+        if output.status.success() {
+            println!("{}", "✓ Facilitator stopped".green().bold());
+            Ok(true)
+        } else {
+            println!("{}", "  ⚠ No facilitator processes found".yellow().dimmed());
+            Ok(false)
         }
-
-        Ok(false)
     }
 
     fn start_server(&self) -> Result<()> {
         let port = self.port;
         let url = self.url.clone();
+        let running = self.running.clone();
 
         thread::spawn(move || {
             let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
@@ -70,29 +72,15 @@ impl Facilitator {
 
             println!("{}", "  Facilitator ready to receive requests".dimmed());
 
-            loop {
-                match listener.accept() {
-                    Ok((mut stream, addr)) => {
-                        println!("{}", format!("  Connection from: {}", addr));
+            for stream in listener.incoming() {
+                if !running.load(Ordering::Relaxed) {
+                    break;
+                }
 
-                        let mut buffer = [0u8; 4096];
-                        match stream.read(&mut buffer) {
-                            Ok(0) => {
-                                println!("{}", "  Connection closed".dimmed());
-                                break;
-                            }
-                            Ok(n) => {
-                                let request = String::from_utf8_lossy(&buffer[..n]);
-                                println!("{}", format!("  Request: {}", request.trim()));
-
-                                let response = self.handle_request(&request);
-                                stream.write_all(response.as_bytes()).ok();
-                                stream.flush().ok();
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to read from connection: {}", e);
-                                break;
-                            }
+                match stream {
+                    Ok(stream) => {
+                        if let Err(e) = Self::handle_connection(stream, &url) {
+                            eprintln!("Error handling connection: {}", e);
                         }
                     }
                     Err(e) => {
@@ -108,31 +96,44 @@ impl Facilitator {
         Ok(())
     }
 
-    fn handle_request(&self, request: &str) -> String {
-        if request.contains("health") {
-            return format!(
-                r#"{{"status":"healthy","url":"{}","wallet":"{}","timestamp":"{}"}}"#,
-                self.url,
-                self.wallet.address,
-                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S")
-            );
-        }
+    fn handle_connection(mut stream: TcpStream, url: &str) -> Result<()> {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .context("Failed to set read timeout")?;
 
-        format!(
-            r#"{{"message":"Facilitator running","url":"{}"}}"#,
-            self.url
-        )
+        let mut reader = BufReader::new(&stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line)?;
+
+        let request_line = request_line.trim();
+        println!("{}", format!("  Request: {}", request_line).dimmed());
+
+        let response = if request_line.contains("GET /health") {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{}",
+                r#"{"status":"healthy","timestamp":"{timestamp}"}"#.replace(
+                    "{timestamp}",
+                    &chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+                )
+            )
+        } else if request_line.contains("POST") {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{}",
+                format!(
+                    r#"{{"message":"Payment facilitated","status":"success","url":"{}"}}"#,
+                    url
+                )
+            )
+        } else {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{}",
+                format!(r#"{{"message":"Facilitator running","url":"{}"}}"#, url)
+            )
+        };
+
+        stream.write_all(response.as_bytes())?;
+        stream.flush()?;
+
+        Ok(())
     }
-}
-
-#[allow(dead_code)]
-#[derive(Parser)]
-pub enum FacilitatorCommands {
-    #[command(name = "start")]
-    Start {
-        #[arg(short, long, default_value = "3001")]
-        port: u16,
-    },
-    #[command(name = "stop")]
-    Stop,
 }

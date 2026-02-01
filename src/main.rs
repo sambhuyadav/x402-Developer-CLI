@@ -1,47 +1,40 @@
 use anyhow::Result;
-use clap::Parser;
-
-mod x402;
+use clap::{Parser, Subcommand};
+use x402_cli::{handle_facilitator, handle_test, handle_wallet, init};
 
 #[derive(Parser)]
-#[command(name = "x402")]
-#[command(about = "Automated x402 project lifecycle management")]
+#[command(
+    name = "x402",
+    version = "1.0.0",
+    about = "Developer CLI for x402 projects"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 enum Commands {
-    #[command(name = "init")]
     Init {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long, default_value = "aptos")]
+        #[arg(short, long)]
         chain: String,
-        #[arg(short, long, default_value = "next")]
+        #[arg(short, long)]
         framework: String,
     },
-
-    #[command(name = "wallet")]
     Wallet {
         #[command(subcommand)]
-        command: x402::WalletCommands,
+        command: x402_cli::WalletCommands,
     },
-
-    #[command(name = "facilitator")]
     Facilitator {
         #[command(subcommand)]
-        command: x402::FacilitatorCommands,
+        command: x402_cli::FacilitatorCommands,
     },
-
-    #[command(name = "test")]
     Test {
         #[command(subcommand)]
-        command: x402::TestCommands,
+        command: x402_cli::TestCommands,
     },
-
-    #[command(name = "deploy")]
     Deploy {
         #[arg(short, long)]
         provider: String,
@@ -54,20 +47,24 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { name, chain, framework } => {
-            x402::init(name, chain, framework).await?;
+        Commands::Init {
+            name,
+            chain,
+            framework,
+        } => {
+            init(name, chain, framework).await?;
         }
         Commands::Wallet { command } => {
-            x402::handle_wallet(command).await?;
+            handle_wallet(command).await?;
         }
         Commands::Facilitator { command } => {
-            x402::handle_facilitator(command).await?;
+            handle_facilitator(command).await?;
         }
         Commands::Test { command } => {
-            x402::handle_test(command).await?;
+            handle_test(command).await?;
         }
         Commands::Deploy { provider } => {
-            x402::deploy(provider).await?;
+            x402_cli::deploy(provider).await?;
         }
     }
 

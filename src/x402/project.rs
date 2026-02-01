@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use colored::*;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -15,12 +15,12 @@ pub struct Project {
 
 impl Project {
     pub fn new(name: String, chain: String, framework: String) -> Self {
-        let name = name.clone();
+        let version = "0.1.0".to_string();
         Project {
             name,
             chain,
             framework,
-            version: "0.1.0".to_string(),
+            version,
         }
     }
 
@@ -86,8 +86,7 @@ X402_PROJECT={}
         fs::write(base_dir.join(".env.example"), env_content)
             .with_context(|| format!("Failed to create .env.example"))?;
 
-        let gitignore_content = format!(
-            r#"# Dependencies
+        let gitignore_content = r#"# Dependencies
 node_modules/
 target/
 
@@ -104,9 +103,7 @@ npm-debug.log*
 
 # Build
 dist/
-build/
-"#,
-        );
+build/"#;
 
         fs::write(base_dir.join(".gitignore"), gitignore_content)
             .with_context(|| format!("Failed to create .gitignore"))?;
@@ -116,7 +113,42 @@ build/
     }
 
     pub fn install_dependencies(&self) -> Result<()> {
-        println!("{}", "  ✓ Installed dependencies".dimmed());
+        match self.framework.to_lowercase().as_str() {
+            "next" | "nextjs" => {
+                let output = Command::new("npm")
+                    .args(["init", "-y"])
+                    .current_dir(&self.name)
+                    .output()
+                    .context("Failed to run npm init")?;
+
+                if output.status.success() {
+                    println!("{}", "  ✓ Installed Node.js dependencies".dimmed());
+                } else {
+                    let error = String::from_utf8_lossy(&output.stderr);
+                    println!(
+                        "{}",
+                        format!("  ⚠ npm init warning: {}", error.trim())
+                            .yellow()
+                            .dimmed()
+                    );
+                }
+            }
+            "react" => {
+                println!(
+                    "{}",
+                    "  ⚠ React: Run `npm install` after project creation"
+                        .yellow()
+                        .dimmed()
+                );
+            }
+            _ => {
+                println!(
+                    "{}",
+                    "  ℹ Custom framework: Install dependencies manually".dimmed()
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -135,8 +167,11 @@ An x402-enabled API built on {} blockchain.
 ## Getting Started
 
 ```bash
-# Install dependencies
+# Install dependencies (if applicable)
 npm install
+
+# Copy environment variables
+cp .env.example .env
 
 # Run the development server
 npm run dev
@@ -149,40 +184,36 @@ x402 facilitator start
 
 See `config/x402.toml` for project configuration.
 
-## Testing Payment Flows
+## x402 CLI Commands
 
 ```bash
-x402 test payment --api http://localhost:3000/api --amount 1000
+# Initialize new x402-enabled API
+x402 init my-weather-api --chain aptos --framework next
+
+# Create a test wallet
+x402 wallet create --network testnet
+
+# Start local facilitator for testing
+x402 facilitator start --port 3001
+
+# Test a payment flow end-to-end
+x402 test payment --api http://localhost:3000/weather --amount 1000
+
+# Deploy to production
+x402 deploy --provider vercel
 ```
 
-## License
+## Documentation
 
-MIT
+See the `docs/` directory for additional documentation.
 "#,
             self.name, self.framework, self.chain
         );
 
-        fs::write(PathBuf::from(&self.name).join("README.md"), readme_content)
-            .with_context(|| format!("Failed to create README"))?;
+        fs::write(format!("{}/README.md", self.name), readme_content)
+            .with_context(|| format!("Failed to create README.md"))?;
 
         println!("{}", "  ✓ Generated README.md".dimmed());
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn run_npm_command(&self, command: &str) -> Result<()> {
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(format!("npm {}", command))
-            .current_dir(&self.name)
-            .output()
-            .with_context(|| format!("Failed to run npm command: {}", command))?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("npm command failed: {}", error));
-        }
-
         Ok(())
     }
 }
