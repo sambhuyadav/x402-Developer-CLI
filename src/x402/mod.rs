@@ -34,6 +34,12 @@ pub enum FacilitatorCommands {
     Start {
         #[arg(short, long, default_value = "3001")]
         port: u16,
+        #[arg(long)]
+        wallet: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(short, long, default_value = "testnet")]
+        network: String,
     },
     #[command(name = "stop")]
     Stop,
@@ -119,8 +125,16 @@ pub async fn handle_wallet(command: WalletCommands) -> Result<()> {
 
 pub async fn handle_facilitator(command: FacilitatorCommands) -> Result<()> {
     match command {
-        FacilitatorCommands::Start { port } => {
-            let _facilitator = Facilitator::start(port)?;
+        FacilitatorCommands::Start { port, wallet, private_key, network } => {
+            let wallet = if let Some(private_key) = private_key {
+                Wallet::import(&private_key, &network)?
+            } else if let Some(wallet_address) = wallet {
+                Wallet::load_from_address(&wallet_address)?
+            } else {
+                Wallet::find_default()?
+            };
+
+            let _facilitator = Facilitator::start(port, wallet)?;
 
             println!("{}", "  Start facilitator in background...".dimmed());
             println!(

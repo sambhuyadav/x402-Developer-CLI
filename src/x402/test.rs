@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use base64::engine::general_purpose::STANDARD as Engine;
 
-const FACILITATOR_URL: &str = "https://x402-navy.vercel.app/facilitator";
+const FACILITATOR_URL: &str = "http://localhost:3001";
 
 #[derive(Serialize, Clone)]
 pub struct PaymentPayload {

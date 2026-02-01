@@ -5,7 +5,7 @@ use x402_cli::{handle_facilitator, handle_test, handle_wallet, init};
 #[derive(Parser)]
 #[command(
     name = "x402",
-    version = "1.0.0",
+    version = "1.1.1",
     about = "Developer CLI for x402 projects"
 )]
 struct Cli {

@@ -15,7 +15,7 @@ pub struct Facilitator {
 }
 
 impl Facilitator {
-    pub fn start(port: u16) -> Result<Self> {
+    pub fn start(port: u16, wallet: crate::x402::wallet::Wallet) -> Result<Self> {
         println!("{}", "Starting facilitator...".cyan());
 
         let url = format!("http://localhost:{}", port);
@@ -30,7 +30,7 @@ impl Facilitator {
 
         let facilitator = Facilitator {
             port,
-            wallet: crate::x402::wallet::Wallet::default(),
+            wallet,
             url: url.clone(),
             running,
         };
@@ -93,6 +93,10 @@ impl Facilitator {
         println!(
             "{}",
             format!("✓ Facilitator server started on {}", url.cyan()).bold()
+        );
+        println!(
+            "{}",
+            format!("  Using wallet: {}", facilitator.wallet.address.cyan()).dimmed()
         );
         println!("{}", "  Waiting for wallet connections...".dimmed());
 

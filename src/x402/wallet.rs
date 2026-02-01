@@ -90,6 +90,58 @@ impl Wallet {
         Ok(wallet)
     }
 
+    pub fn load_from_address(address: &str) -> Result<Self> {
+        let mut wallets_dir = dirs::home_dir().context("Failed to determine home directory")?;
+        wallets_dir.push(".x402");
+        wallets_dir.push("wallets");
+
+        let wallet_file = wallets_dir.join(format!("{}.json", address));
+
+        if !wallet_file.exists() {
+            anyhow::bail!("Wallet file not found: {}", wallet_file.display());
+        }
+
+        let wallet_data = fs::read_to_string(&wallet_file)
+            .with_context(|| format!("Failed to read wallet file: {}", wallet_file.display()))?;
+
+        let wallet: Wallet = serde_json::from_str(&wallet_data)
+            .context("Failed to parse wallet data")?;
+
+        Ok(wallet)
+    }
+
+    pub fn find_default() -> Result<Self> {
+        let mut wallets_dir = dirs::home_dir().context("Failed to determine home directory")?;
+        wallets_dir.push(".x402");
+        wallets_dir.push("wallets");
+
+        if !wallets_dir.exists() {
+            anyhow::bail!("No wallets directory found. Create a wallet first using `x402 wallet create`");
+        }
+
+        let entries: Vec<_> = fs::read_dir(&wallets_dir)
+            .context("Failed to read wallets directory")?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        if entries.is_empty() {
+            anyhow::bail!("No wallets found. Create a wallet first using `x402 wallet create`");
+        }
+
+        let first_wallet = entries
+            .first()
+            .context("No wallets found")?;
+
+        let wallet_file = first_wallet.path();
+        let wallet_data = fs::read_to_string(&wallet_file)
+            .with_context(|| format!("Failed to read wallet file: {}", wallet_file.display()))?;
+
+        let wallet: Wallet = serde_json::from_str(&wallet_data)
+            .context("Failed to parse wallet data")?;
+
+        Ok(wallet)
+    }
+
     pub async fn fund_from_faucet(&self) -> Result<()> {
         if self.network != "testnet" {
             println!(

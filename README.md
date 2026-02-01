@@ -163,20 +163,36 @@ x402-cli facilitator <COMMAND>
 
 **Examples:**
 ```bash
-# Start facilitator on default port (3001)
+# Start facilitator on default port (3001) with auto-detected wallet
 x402-cli facilitator start
 
 # Start facilitator on custom port
 x402-cli facilitator start --port 8080
 
+# Start facilitator on mainnet
+x402-cli facilitator start --network mainnet
+
+# Start facilitator with specific wallet address
+x402-cli facilitator start --wallet 0xe910ad0506573009839aa55ad8211ad01ba3f7394d93d849378d342449df09
+
+# Start facilitator with private key and custom network
+x402-cli facilitator start --private-key 0x<private_key> --network testnet
+
 # Stop facilitator
 x402-cli facilitator stop
 ```
+
+**Options for `start`:**
+- `-p, --port <PORT>`: Port to listen on (default: 3001)
+- `--wallet <ADDRESS>`: Use wallet with this address (optional)
+- `--private-key <KEY>`: Use wallet from this private key (optional)
+- `-n, --network <NETWORK>`: Network to use (default: testnet)
 
 **Output:**
 - Starts a TCP server on the specified port
 - Health check endpoint at `http://localhost:<port>/health`
 - Handles payment facilitation requests
+- Uses specified wallet for payment transactions (defaults to first found wallet)
 
 ### `test` - Test payment flows
 
