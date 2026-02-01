@@ -19,6 +19,13 @@ pub enum WalletCommands {
         #[arg(short, long, default_value = "testnet")]
         network: String,
     },
+    #[command(name = "import")]
+    Import {
+        #[arg(short, long)]
+        private_key: String,
+        #[arg(short, long, default_value = "testnet")]
+        network: String,
+    },
 }
 
 #[derive(Parser)]
@@ -85,6 +92,20 @@ pub async fn handle_wallet(command: WalletCommands) -> Result<()> {
             wallet.save_to_file()?;
 
             wallet.fund_from_faucet().await?;
+
+            println!(
+                "{}",
+                format!("  Wallet Address: {}", wallet.address.cyan()).dimmed()
+            );
+
+            Ok(())
+        }
+        WalletCommands::Import { private_key, network } => {
+            println!("{}", "Importing wallet...".cyan());
+
+            let wallet = Wallet::import(&private_key, &network)?;
+
+            wallet.save_to_file()?;
 
             println!(
                 "{}",

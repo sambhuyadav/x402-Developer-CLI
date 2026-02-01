@@ -21,6 +21,13 @@ impl Facilitator {
         let url = format!("http://localhost:{}", port);
         let running = Arc::new(AtomicBool::new(true));
 
+        let (sender, receiver) = std::sync::mpsc::channel::<bool>();
+        let sender_clone = sender.clone();
+
+        let port_clone = port;
+        let running_clone = running.clone();
+        let url_clone = url.clone();
+
         let facilitator = Facilitator {
             port,
             wallet: crate::x402::wallet::Wallet::default(),
@@ -28,7 +35,60 @@ impl Facilitator {
             running,
         };
 
-        facilitator.start_server()?;
+        thread::spawn(move || {
+            let listener = match TcpListener::bind(format!("127.0.0.1:{}", port_clone)) {
+                Ok(l) => {
+                    sender_clone.send(true).ok();
+                    l
+                }
+                Err(e) => {
+                    let _ = sender_clone.send(false);
+                    eprintln!(
+                        "{}",
+                        format!("✗ Failed to bind to port {}: {}", port_clone, e)
+                            .red()
+                            .bold()
+                    );
+                    if e.raw_os_error() == Some(61) {
+                        eprintln!(
+                            "{}",
+                            "  Error 61: Port already in use. Try a different port or stop the existing facilitator."
+                                .yellow()
+                                .dimmed()
+                        );
+                    }
+                    return;
+                }
+            };
+
+            println!("{}", "  Facilitator ready to receive requests".dimmed());
+
+            for stream in listener.incoming() {
+                if !running_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                match stream {
+                    Ok(stream) => {
+                        if let Err(e) = Self::handle_connection(stream, &url_clone) {
+                            eprintln!("Error handling connection: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to accept connection: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        thread::sleep(Duration::from_millis(200));
+
+        if let Ok(bound) = receiver.try_recv() {
+            if !bound {
+                anyhow::bail!("Facilitator failed to start - could not bind to port");
+            }
+        }
 
         println!(
             "{}",
@@ -54,46 +114,6 @@ impl Facilitator {
             println!("{}", "  ⚠ No facilitator processes found".yellow().dimmed());
             Ok(false)
         }
-    }
-
-    fn start_server(&self) -> Result<()> {
-        let port = self.port;
-        let url = self.url.clone();
-        let running = self.running.clone();
-
-        thread::spawn(move || {
-            let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
-                Ok(l) => l,
-                Err(e) => {
-                    eprintln!("Failed to bind to port {}: {}", port, e);
-                    return;
-                }
-            };
-
-            println!("{}", "  Facilitator ready to receive requests".dimmed());
-
-            for stream in listener.incoming() {
-                if !running.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                match stream {
-                    Ok(stream) => {
-                        if let Err(e) = Self::handle_connection(stream, &url) {
-                            eprintln!("Error handling connection: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to accept connection: {}", e);
-                        break;
-                    }
-                }
-            }
-        });
-
-        thread::sleep(Duration::from_millis(100));
-
-        Ok(())
     }
 
     fn handle_connection(mut stream: TcpStream, url: &str) -> Result<()> {

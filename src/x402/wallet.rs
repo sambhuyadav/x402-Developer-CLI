@@ -58,6 +58,38 @@ impl Wallet {
         Ok(())
     }
 
+    pub fn import(private_key: &str, network: &str) -> Result<Self> {
+        println!("{}", "Importing wallet from private key...".cyan());
+
+        let private_key_clean = private_key.trim_start_matches("0x");
+        let private_key_bytes = hex::decode(private_key_clean)
+            .map_err(|e| anyhow::anyhow!("Failed to decode private key hex: {}", e))?;
+
+        if private_key_bytes.len() < 32 {
+            return Err(anyhow::anyhow!("Private key must be at least 32 bytes"));
+        }
+
+        let mut key_bytes = [0u8; 32];
+        key_bytes.copy_from_slice(&private_key_bytes[..32]);
+
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        let public_key = signing_key.verifying_key();
+        let public_key_bytes = public_key.as_bytes();
+        let address = hex::encode(&public_key_bytes[1..]);
+        let address = format!("0x{}", address);
+
+        let wallet = Wallet {
+            address,
+            private_key: private_key_clean.to_string(),
+            network: network.to_string(),
+            seed_phrase: String::new(),
+        };
+
+        println!("{}", "✓ Wallet imported successfully".green().bold());
+
+        Ok(wallet)
+    }
+
     pub async fn fund_from_faucet(&self) -> Result<()> {
         if self.network != "testnet" {
             println!(
@@ -2189,6 +2221,11 @@ impl Wallet {
         let formatted_private_key = format!("0x{}", private_key_hex);
 
         (formatted_private_key, formatted_address)
+    }
+
+    fn derive_address_from_public_key(public_key_bytes: &[u8]) -> String {
+        let address = hex::encode(&public_key_bytes[1..]);
+        format!("0x{}", address)
     }
 }
 
