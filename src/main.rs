@@ -5,7 +5,7 @@ mod x402;
 
 #[derive(Parser)]
 #[command(name = "x402")]
-#[command(about = "Automated x402 project lifecycle management", long_about = None)]
+#[command(about = "Automated x402 project lifecycle management")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
