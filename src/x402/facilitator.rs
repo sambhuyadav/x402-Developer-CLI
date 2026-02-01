@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use colored::*;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -41,7 +41,7 @@ impl Facilitator {
     pub fn stop() -> Result<bool> {
         println!("{}", "Stopping facilitator...".yellow());
 
-        let cmd = Command::new("pkill")
+        let mut cmd = Command::new("pkill")
             .args(["-f", "facilitator"])
             .spawn()
             .ok();
@@ -68,7 +68,7 @@ impl Facilitator {
                 }
             };
 
-            println!("{}", "  Facilitator ready to receive requests");
+            println!("{}", "  Facilitator ready to receive requests".dimmed());
 
             loop {
                 match listener.accept() {
@@ -78,17 +78,14 @@ impl Facilitator {
                         let mut buffer = [0u8; 4096];
                         match stream.read(&mut buffer) {
                             Ok(0) => {
-                                println!("{}", "  Connection closed");
+                                println!("{}", "  Connection closed".dimmed());
                                 break;
                             }
                             Ok(n) => {
                                 let request = String::from_utf8_lossy(&buffer[..n]);
                                 println!("{}", format!("  Request: {}", request.trim()));
 
-                                let response = format!(
-                                    r#"{{"message":"Facilitator running","url":"{}"}}"#,
-                                    url
-                                );
+                                let response = self.handle_request(&request);
                                 stream.write_all(response.as_bytes()).ok();
                                 stream.flush().ok();
                             }
@@ -128,6 +125,7 @@ impl Facilitator {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Parser)]
 pub enum FacilitatorCommands {
     #[command(name = "start")]

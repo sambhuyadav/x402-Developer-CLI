@@ -169,6 +169,7 @@ MIT
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn run_npm_command(&self, command: &str) -> Result<()> {
         let output = Command::new("sh")
             .arg("-c")

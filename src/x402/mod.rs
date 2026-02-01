@@ -196,11 +196,12 @@ pub async fn handle_facilitator(command: FacilitatorCommands) -> Result<()> {
 /// # Payment Flow
 ///
 /// The payment testing follows this sequence:
-/// 1. **Initial Request**: Sends GET request to API
+/// 1. **Initial Request**: Sends HTTP GET request to API
 /// 2. **402 Handling**: Detects if API requires payment (HTTP 402)
 /// 3. **Payment Transaction**: Simulates creating and signing a payment
 /// 4. **Verification**: Verifies payment settlement
-/// 5. **Final Response**: Receives and displays the API response
+/// 5. **Final Request**: Resends the request with payment token
+/// 6. **Response Display**: Shows the API response
 ///
 /// # Examples
 ///
@@ -224,9 +225,10 @@ pub async fn handle_facilitator(command: FacilitatorCommands) -> Result<()> {
 /// # Errors
 ///
 /// Returns an error if:
-/// - Initial request fails
+/// - Initial request fails to reach the API
 /// - Payment transaction cannot be created
-/// - Payment verification fails
+/// - Final request fails
+/// - Response cannot be read or parsed
 pub async fn handle_test(command: TestCommands) -> Result<()> {
     match command {
         TestCommands::Payment { api, amount } => {
@@ -234,9 +236,71 @@ pub async fn handle_test(command: TestCommands) -> Result<()> {
             println!("{}", format!("  API URL: {}", api.cyan()).dimmed());
             println!("{}", format!("  Amount: {}", amount));
 
-            test_payment_flow(&api, amount).await?;
+            let client = Client::new();
 
-            Ok(())
+            println!("{}", "  Sending initial request...".dimmed());
+
+            let response = client
+                .get(&api)
+                .send()
+                .await
+                .context("Failed to send initial request")?;
+
+            let status = response.status();
+
+            println!(
+                "{}",
+                format!("  Initial response status: {}", status.as_str().bright_black()
+            );
+
+            if status.as_u16() == 200 {
+                println!("{}", "✓ Payment flow completed (no payment required)".green().bold());
+                return Ok(());
+            } else if status.as_u16() == 402 {
+                println!("{}", "  Got 402 Payment Required - creating payment transaction...".dimmed());
+                println!("{}", "  Payment transaction created".green());
+                println!("{}", "  Payment transaction signed".green());
+                println!("{}", "  Payment sent with retry".green());
+                println!("{}", "  Verifying payment and settlement...".dimmed());
+
+                let client_for_verification = Client::new();
+                let payment_response = client_for_verification
+                    .get(&api)
+                    .header("X-Payment-Token", "test-token-123")
+                    .send()
+                    .await
+                    .context("Failed to send payment verification request")?;
+
+                if payment_response.status().is_success() {
+                    let body = payment_response
+                        .text()
+                        .await
+                        .context("Failed to read payment response")?;
+
+                    println!("{}", "✓ Payment flow completed".green().bold());
+                    println!("{}", "✓ Received response".green().bold());
+                    println!(
+                        "{}",
+                        format!("  Response: {}", body.cyan()).dimmed()
+                    );
+                } else {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ⚠ Unexpected status code: {}",
+                            payment_response.status().as_str()
+                        ).yellow()
+                    );
+                }
+            } else {
+                println!(
+                    "{}",
+                    format!(
+                        "  ⚠ Unexpected status code: {}",
+                        status.as_str()
+                    ).yellow()
+                );
+            }
         }
     }
 }
@@ -279,7 +343,7 @@ pub async fn handle_test(command: TestCommands) -> Result<()> {
 pub async fn deploy(provider: String) -> Result<()> {
     println!("{}", format!("Deploying to {}", provider.cyan()).bold());
 
-    println!("{}", "  Checking deployment prerequisites...".dimmed());
+    println!("{}", "  Checking deployment prerequisites...".dimmed();
 
     println!("{}", "  Deploying facilitator...".dimmed());
 
@@ -299,171 +363,4 @@ pub async fn deploy(provider: String) -> Result<()> {
     );
 
     Ok(())
-}
-
-/// Tests the complete payment flow from initial request to final response
-///
-/// # Arguments
-///
-/// * `api_url` - The URL of the API endpoint to test
-/// * `amount` - The payment amount in smallest units
-///
-/// # Behavior
-///
-/// The function performs a complete end-to-end payment flow test:
-///
-/// 1. **Initial Request**: Sends HTTP GET request to the specified API endpoint
-/// 2. **Response Analysis**: Checks the HTTP status code
-/// 3. **Payment Handling**: If API returns 402 (Payment Required), simulates payment transaction
-/// 4. **Payment Transaction**: Simulates creating and signing a payment on the blockchain
-/// 5. **Verification**: Verifies payment settlement on the blockchain
-/// 6. **Final Request**: Resends the request with payment token
-/// 7. **Response Display**: Shows the API response
-///
-/// # Flow Diagram
-///
-/// ```text
-/// Initial Request → [API] → 402 Payment Required → Payment Transaction → Verification → Final Request → Response
-/// ```
-///
-/// # Examples
-///
-/// ```bash
-/// # Test payment flow
-/// x402-cli test payment --api http://localhost:3000/weather --amount 1000
-/// ```
-///
-/// # Notes
-///
-/// If no API is running on the specified port, you'll see "Connection refused" which is expected.
-/// This is normal behavior - the CLI is working correctly by detecting the unreachable endpoint.
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful test completion
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Initial request fails to reach the API
-/// - Payment transaction cannot be created
-/// - Final request fails
-/// - Response cannot be read or parsed
-async fn test_payment_flow(api_url: &str, amount: u64) -> Result<()> {
-    let client = Client::new();
-
-    println!("{}", "  Sending initial request...".dimmed());
-
-    let response = client
-        .get(api_url)
-        .send()
-        .await
-        .context("Failed to send initial request")?;
-
-    println!(
-        "{}",
-        format!(
-            "  Initial response status: {}",
-            response.status().as_str().bright_black()
-        ).dimmed()
-    );
-
-    if response.status().is_success() {
-        println!("{}", "✓ Payment flow completed (no payment required)".green().bold());
-        return Ok(());
-    }
-
-    if response.status() == 402 {
-        println!("{}", "  Got 402 Payment Required - creating payment transaction...".dimmed());
-
-        println!("{}", "  Payment transaction created".green());
-        println!("{}", "  Payment transaction signed".green());
-        println!("{}", "  Payment sent with retry".green());
-
-        println!("{}", "  Verifying payment and settlement...".dimmed());
-
-        println!("{}", "  Payment verified and settled".green());
-
-        println!("{}", "  Receiving response...".dimmed());
-
-        let payment_response = client
-            .get(api_url)
-            .header("X-Payment-Token", "test-token-123")
-            .send()
-            .await
-            .context("Failed to send payment verification request")?;
-
-        if payment_response.status().is_success() {
-            let body = payment_response
-                .text()
-                .await
-                .context("Failed to read payment response")?;
-
-            println!("{}", "✓ Payment flow completed".green().bold());
-            println!("{}", "✓ Received response".green().bold());
-            println!(
-                "{}",
-                format!("  Response: {}", body.cyan()).dimmed()
-            );
-        } else {
-            println!(
-                "{}",
-                format!(
-                    "  ⚠ Unexpected status code: {}",
-                    payment_response.status().as_str()
-                ).yellow()
-            );
-        }
-    } else {
-        println!(
-            "{}",
-            format!(
-                "  ⚠ Unexpected status code: {}",
-                response.status().as_str()
-            ).yellow()
-        );
-    }
-
-    Ok(())
-}
-
-/// Initializes a facilitator instance for testing purposes
-///
-/// # Arguments
-///
-/// * `port` - The port number to run the facilitator on
-///
-/// # Behavior
-///
-/// Creates a new facilitator instance that:
-/// - Listens for incoming TCP connections on the specified port
-/// - Provides health check endpoint
-/// - Runs in the background for continuous operation
-///
-/// # Examples
-///
-/// ```bash
-/// # Start on default port (3001)
-/// x402-cli facilitator start
-///
-/// # Start on custom port
-/// x402-cli facilitator start --port 8080
-/// ```
-///
-/// # Returns
-///
-/// Returns the initialized `Facilitator` instance
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Port is already in use
-/// - Cannot bind to the specified port
-///
-/// # Notes
-///
-/// The facilitator runs in a background thread and does not block the CLI.
-/// Use the `facilitator stop` command to terminate the facilitator.
-pub fn init_facilitator(port: u16) -> Facilitator {
-    Facilitator::start(port).expect("Failed to start facilitator")
 }

@@ -4,12 +4,17 @@ version = "1.0.0"
 edition = "2021"
 description = "A comprehensive developer CLI for project scaffolding, wallet management, and payment testing."
 license = "MIT"
+license-file = "LICENSE"
 repository = "https://github.com/sambhuyadav/x402-Developer-CLI"
 homepage = "https://github.com/sambhuyadav/x402-Developer-CLI#readme"
 documentation = "https://docs.rs/crate/x402-cli/"
-keywords = ["x402", "cli", "aptos", "blockchain", "payment", "wallet", "facilitator", "developer", "automation"]
+keywords = ["x402", "cli", "aptos", "blockchain", "automation"]
 categories = ["command-line-interface", "development-tools"]
 
+[package.metadata]
+repository = "https://github.com/sambhuyadav/x402-Developer-CLI"
+homepage = "https://github.com/sambhuyadav/x402-Developer-CLI#readme"
+documentation = "https://docs.rs/crate/x402-cli/"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
